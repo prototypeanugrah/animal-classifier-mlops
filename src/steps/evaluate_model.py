@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 
 import mlflow
@@ -10,21 +9,18 @@ from zenml import step
 
 from src.config import DataConfig, TrainConfig
 from src.data.dataset import DatasetBundle
-from src.evaluators import Evaluator
+from src.evaluators import EvaluateModelOutput, Evaluator
+from src.materializers import EvaluateModelOutputMaterializer
 from src.models.resnet18 import AnimalClassifierResNet18
 
 LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
-class EvaluateModelOutput:
-    accuracy: float
-    precision: float
-    recall: float
-    f1: float
-
-
-@step(enable_cache=False, experiment_tracker="mlflow_tracker")
+@step(
+    enable_cache=False,
+    experiment_tracker="mlflow_tracker",
+    output_materializers=EvaluateModelOutputMaterializer,
+)
 def evaluate_model(
     model_path: str,
     data_bundle: DatasetBundle,
@@ -99,37 +95,30 @@ def evaluate_model(
 
         LOGGER.info("Calculating evaluation metrics...")
         # Calculate the metrics
-        accuracy, macro_precision, macro_recall, macro_f1 = (
-            evaluator.compute_classification_metrics(
-                y_pred=y_pred,
-                y_true=y_true,
-            )
+        metrics = evaluator.compute_classification_metrics(
+            y_pred=y_pred,
+            y_true=y_true,
         )
 
         LOGGER.info(
             "Test metrics - Accuracy: %.4f, Precision: %.4f, Recall: %.4f, F1: %.4f",
-            accuracy,
-            macro_precision,
-            macro_recall,
-            macro_f1,
+            metrics.accuracy,
+            metrics.precision,
+            metrics.recall,
+            metrics.f1,
         )
 
         mlflow.log_metrics(
             {
-                "test_accuracy": accuracy,
-                "test_precision": macro_precision,
-                "test_recall": macro_recall,
-                "test_f1": macro_f1,
+                "test_accuracy": metrics.accuracy,
+                "test_precision": metrics.precision,
+                "test_recall": metrics.recall,
+                "test_f1": metrics.f1,
             }
         )
 
         LOGGER.info("Evaluation completed successfully.")
-        return EvaluateModelOutput(
-            accuracy=accuracy,
-            precision=macro_precision,
-            recall=macro_recall,
-            f1=macro_f1,
-        )
+        return metrics
     except Exception as e:
         LOGGER.error(
             "Exception %s occurred in evaluate_model step: %s",
