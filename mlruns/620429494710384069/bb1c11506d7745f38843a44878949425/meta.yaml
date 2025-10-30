@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/anugrah/Desktop/Projects/animal-classifier-mlops/mlruns/620429494710384069/bb1c11506d7745f38843a44878949425/artifacts
+end_time: 1761841978422
+entry_point_name: ''
+experiment_id: '620429494710384069'
+lifecycle_stage: active
+run_id: bb1c11506d7745f38843a44878949425
+run_name: train_pipeline-2025_10_30-16_32_57_343567
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1761841978220
+status: 4
+tags: []
+user_id: anugrah

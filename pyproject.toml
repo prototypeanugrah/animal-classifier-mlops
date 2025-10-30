@@ -1,0 +1,27 @@
+[project]
+name = "animal-classifier-mlops"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ipykernel>=7.1.0",
+    "mlflow>=3.5.1",
+    "numpy==2.3.0",
+    "nvitop>=1.5.3",
+    "pandas>=2.3.3",
+    "passlib>=1.7.4",
+    "pillow>=12.0.0",
+    "pydantic>=2.11.9",
+    "pymysql>=1.1.2",
+    "pyyaml>=6.0.3",
+    "requests>=2.32.5",
+    "scikit-learn>=1.7.2",
+    "sqlalchemy-utils>=0.42.0",
+    "sqlmodel==0.0.18",
+    "streamlit>=1.51.0",
+    "torch>=2.9.0",
+    "torchvision>=0.24.0",
+    "tqdm>=4.67.1",
+    "zenml[local,server]>=0.91.0",
+]
