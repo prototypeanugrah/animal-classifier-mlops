@@ -13,6 +13,5 @@ wheels/
 *.jpg
 
 # zenml
-# .zen
-# mlruns/
-# mlruns/
+.zen
+mlruns/
