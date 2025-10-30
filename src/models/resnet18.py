@@ -296,3 +296,13 @@ class AnimalClassifierResNet18:
                 predictions.append(preds.cpu())
 
         return torch.cat(predictions)
+
+    @property
+    def model(self) -> nn.Module:
+        """Expose the underlying model (for compatibility)."""
+        return self._model
+
+    @property
+    def device(self) -> str:
+        """Expose the configured device."""
+        return self._device
