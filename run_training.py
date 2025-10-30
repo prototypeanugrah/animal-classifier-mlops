@@ -25,14 +25,16 @@ def run_training(config: Path):
     pipeline_config = load_config(config)
 
     LOGGER.info("Starting training pipeline...")
-    # In ZenML >= 0.91, you must call .run() to actually execute the pipeline
     pipeline_run = train_pipeline(
         data_config=pipeline_config.data,
         train_config=pipeline_config.train,
     )
-    pipeline_run.run()
 
-    LOGGER.info("Training pipeline completed successfully!")
+    run_id = getattr(pipeline_run, "id", None)
+    if run_id:
+        LOGGER.info("Training pipeline completed successfully! Run ID: %s", run_id)
+    else:
+        LOGGER.info("Training pipeline completed successfully!")
     LOGGER.info(
         "Evaluation metrics have been logged to MLflow. View them in the MLflow UI."
     )
