@@ -141,7 +141,12 @@ Execute the ZenML pipeline to prepare data, train the model, and evaluate it:
 uv run run_training.py
 ```
 
-Successful runs log metrics and artifacts to MLflow. To browse them, launch the MLflow UI provided by ZenML (URL shown in the CLI output, typically `http://127.0.0.1:8237/` for the ZenML dashboard with MLflow accessible through it).
+Successful runs log metrics and artifacts to MLflow. To browse them, launch the MLflow UI provided by ZenML (URL shown in the CLI output for the ZenML dashboard with MLflow accessible through it).
+
+You can manually launch the MLflow experiment tracking through this command (in a separate terminal):
+```bash
+uv run mlflow ui --backend-store-uri file:./mlruns --port 5000
+```
 
 ## Repository Structure
 

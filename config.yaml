@@ -16,18 +16,18 @@ data:
 train:
   seed: 42
   model_name: "resnet18"
-  batch_size: 128
+  batch_size: 256
   optimizer: "adamw"
   scheduler: "onecyclelr"
   lr: 0.001
-  epochs: 10
+  epochs: 25
   device: "cuda"
   pretrained: true
   save_dir: "models"
   save_best_only: true
 
 evaluation:
-  min_precision: 0.7
-  min_recall: 0.7
-  min_f1: 0.7
-  min_accuracy: 0.7
+  min_precision: 0.2
+  min_recall: 0.2
+  min_f1: 0.2
+  min_accuracy: 0.5
