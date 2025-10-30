@@ -49,10 +49,8 @@ def evaluate_model(
     """
     evaluator = Evaluator()
 
-    LOGGER.info("Using test dataset from data bundle...")
     num_classes = len(data_bundle.label_names)
 
-    LOGGER.info("Loading model from %s...", model_path)
     model = AnimalClassifierResNet18(
         num_classes=num_classes,
         optimizer=train_config.optimizer,
@@ -65,7 +63,6 @@ def evaluate_model(
     )
     model.load(Path(model_path))
 
-    LOGGER.info("Creating test data loader...")
     test_loader = DataLoader(
         data_bundle.test,
         batch_size=data_config.batch_size,
@@ -93,7 +90,6 @@ def evaluate_model(
         y_pred = np.array(all_predictions)
         y_true = np.array(all_labels)
 
-        LOGGER.info("Calculating evaluation metrics...")
         # Calculate the metrics
         metrics = evaluator.compute_classification_metrics(
             y_pred=y_pred,
@@ -107,7 +103,6 @@ def evaluate_model(
             metrics.recall,
             metrics.f1,
         )
-
         mlflow.log_metrics(
             {
                 "test_accuracy": metrics.accuracy,

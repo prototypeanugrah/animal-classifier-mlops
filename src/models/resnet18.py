@@ -43,9 +43,7 @@ class AnimalClassifierResNet18:
 
         requested_device = device.lower()
         if requested_device == "cuda" and not torch.cuda.is_available():
-            LOGGER.warning(
-                "CUDA requested but not available; falling back to CPU."
-            )
+            LOGGER.warning("CUDA requested but not available; falling back to CPU.")
             requested_device = "cpu"
         self._device = requested_device
 
@@ -265,7 +263,7 @@ class AnimalClassifierResNet18:
         """
         self._model.load_state_dict(torch.load(path, map_location=self._device))
         self._model = self._model.to(self._device)
-        LOGGER.info(f"Model loaded from {path}")
+        LOGGER.info("Model loaded from %s", path)
 
     def get_model(self) -> nn.Module:
         """Get the underlying PyTorch model."""
