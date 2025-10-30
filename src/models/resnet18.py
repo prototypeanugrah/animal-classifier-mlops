@@ -33,7 +33,7 @@ class AnimalClassifierResNet18:
             pretrained: Whether to use pretrained ImageNet weights
             lr: Learning rate for optimizer
             epochs: Number of training epochs
-            device: Device to use for training ('cuda' or 'cpu')
+            device: Device to use for training ('cuda', 'mps' or 'cpu')
             train_loader: Training data loader (required for scheduler setup)
             class_weights: Optional class weights for loss function
         """
@@ -43,8 +43,13 @@ class AnimalClassifierResNet18:
 
         requested_device = device.lower()
         if requested_device == "cuda" and not torch.cuda.is_available():
-            LOGGER.warning("CUDA requested but not available; falling back to CPU.")
-            requested_device = "cpu"
+            LOGGER.warning("CUDA requested but not available!")
+            if torch.backends.mps.is_available():
+                LOGGER.info("MPS is available, using MPS instead of CPU.")
+                requested_device = "mps"
+            else:
+                LOGGER.info("No CUDA or MPS available, using CPU.")
+                requested_device = "cpu"
         self._device = requested_device
 
         # Initialize model

@@ -96,13 +96,6 @@ def evaluate_model(
             y_true=y_true,
         )
 
-        LOGGER.info(
-            "Test metrics - Accuracy: %.4f, Precision: %.4f, Recall: %.4f, F1: %.4f",
-            metrics.accuracy,
-            metrics.precision,
-            metrics.recall,
-            metrics.f1,
-        )
         mlflow.log_metrics(
             {
                 "test_accuracy": metrics.accuracy,
