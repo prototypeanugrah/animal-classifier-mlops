@@ -1,10 +1,18 @@
 import logging
-from typing import Tuple
+from dataclasses import dataclass
 
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass
+class EvaluateModelOutput:
+    accuracy: float
+    precision: float
+    recall: float
+    f1: float
 
 
 class Evaluator:
@@ -13,7 +21,7 @@ class Evaluator:
 
     def compute_classification_metrics(
         self, y_pred: np.ndarray, y_true: np.ndarray
-    ) -> Tuple[float, float, float, float]:
+    ) -> EvaluateModelOutput:
         accuracy = accuracy_score(y_true=y_true, y_pred=y_pred)
         (
             macro_precision,
@@ -32,4 +40,9 @@ class Evaluator:
         LOGGER.info("Macro Recall: %.4f.", macro_recall)
         LOGGER.info("Macro F1: %.4f.", macro_f1)
 
-        return accuracy, macro_precision, macro_recall, macro_f1
+        return EvaluateModelOutput(
+            accuracy=accuracy,
+            precision=macro_precision,
+            recall=macro_recall,
+            f1=macro_f1,
+        )
