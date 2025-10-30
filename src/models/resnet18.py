@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+import mlflow
 import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import OneCycleLR
@@ -226,6 +227,12 @@ class AnimalClassifierResNet18:
             self._training_history["train_acc"].append(train_acc)
             self._training_history["val_loss"].append(val_loss)
             self._training_history["val_acc"].append(val_acc)
+
+            # Log metrics to MLflow for real-time monitoring
+            mlflow.log_metric("train_loss", train_loss, step=epoch)
+            mlflow.log_metric("train_accuracy", train_acc, step=epoch)
+            mlflow.log_metric("val_loss", val_loss, step=epoch)
+            mlflow.log_metric("val_accuracy", val_acc, step=epoch)
 
             # Save model checkpoint
             if save_dir is not None:
