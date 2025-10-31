@@ -82,7 +82,10 @@ class AnimalDataset(Dataset):
             if not self._download_with_retries(
                 record.image_url, cache_path, record.uuid
             ):
-                return self._placeholder_image(cache_path)
+                raise RuntimeError(
+                    f"Failed to download image for UUID {record.uuid} "
+                    f"after {self._MAX_DOWNLOAD_RETRIES} attempts."
+                )
 
         try:
             # Open the image file directly instead of using a file handle
@@ -102,13 +105,16 @@ class AnimalDataset(Dataset):
                     image = Image.open(cache_path).convert("RGB")
                     return image
                 except Exception as e2:
-                    LOGGER.error(
-                        "Failed to load image %s (UUID: %s) even after re-download: %s",
-                        cache_path,
-                        record.uuid,
-                        str(e2),
-                    )
-            return self._placeholder_image(cache_path)
+                    cache_path.unlink(missing_ok=True)
+                    raise RuntimeError(
+                        f"Failed to load cached image for UUID {record.uuid} even "
+                        f"after re-download: {e2}"
+                    ) from e2
+            cache_path.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"Failed to download image for UUID {record.uuid} "
+                f"after {self._MAX_DOWNLOAD_RETRIES} attempts."
+            )
 
     @classmethod
     def _download_with_retries(cls, url: str, destination: Path, uuid: str) -> bool:
@@ -170,16 +176,6 @@ class AnimalDataset(Dataset):
             LOGGER.error("Failed to download image from %s: %s", url, str(e))
             return False
         return True
-
-    @staticmethod
-    def _placeholder_image(destination: Path) -> Image.Image:
-        placeholder = Image.new("RGB", (1, 1), color="white")
-        try:
-            placeholder.save(destination, format="JPEG")
-        except Exception:  # pragma: no cover - best effort
-            pass
-        return placeholder
-
 
 @dataclass
 class DatasetBundle:
@@ -369,13 +365,22 @@ def filter_records_with_cached_images(
     for record in records:
         cache_path = cache_dir / f"{record.uuid}.jpg"
         if cache_path.exists():
-            cached_records.append(record)
-            continue
+            try:
+                Image.open(cache_path).convert("RGB")
+                cached_records.append(record)
+                continue
+            except Exception:
+                cache_path.unlink(missing_ok=True)
 
         if AnimalDataset._download_with_retries(
             record.image_url, cache_path, record.uuid
         ) and cache_path.exists():
-            cached_records.append(record)
+            try:
+                Image.open(cache_path).convert("RGB")
+                cached_records.append(record)
+            except Exception:
+                failed.append(record.uuid)
+                cache_path.unlink(missing_ok=True)
         else:
             failed.append(record.uuid)
             cache_path.unlink(missing_ok=True)
