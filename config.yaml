@@ -16,7 +16,7 @@ data:
 train:
   seed: 42
   model_name: "resnet50"
-  mlflow_model_name: "animal-classifier-resnet18"
+  mlflow_model_name: "animal-classifier-resnet50"
   batch_size: 256
   optimizer: "adamw"
   scheduler: "onecyclelr"

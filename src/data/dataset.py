@@ -50,7 +50,7 @@ class AnimalDataset(Dataset):
         cache_dir (Optional[Path]): A directory to cache the images.
     """
 
-    _MAX_DOWNLOAD_RETRIES = 3
+    _MAX_DOWNLOAD_RETRIES = 1
     _RETRY_BACKOFF_SECONDS = 2.0
 
     def __init__(
@@ -121,11 +121,7 @@ class AnimalDataset(Dataset):
         for attempt in range(1, cls._MAX_DOWNLOAD_RETRIES + 1):
             try:
                 success = cls._download_image(url, destination)
-                if (
-                    success
-                    and destination.exists()
-                    and destination.stat().st_size > 0
-                ):
+                if success and destination.exists() and destination.stat().st_size > 0:
                     return True
                 destination.unlink(missing_ok=True)
                 LOGGER.warning(
@@ -176,6 +172,7 @@ class AnimalDataset(Dataset):
             LOGGER.error("Failed to download image from %s: %s", url, str(e))
             return False
         return True
+
 
 @dataclass
 class DatasetBundle:
@@ -372,9 +369,12 @@ def filter_records_with_cached_images(
             except Exception:
                 cache_path.unlink(missing_ok=True)
 
-        if AnimalDataset._download_with_retries(
-            record.image_url, cache_path, record.uuid
-        ) and cache_path.exists():
+        if (
+            AnimalDataset._download_with_retries(
+                record.image_url, cache_path, record.uuid
+            )
+            and cache_path.exists()
+        ):
             try:
                 Image.open(cache_path).convert("RGB")
                 cached_records.append(record)
@@ -395,9 +395,7 @@ def filter_records_with_cached_images(
                 if line.strip()
             ]
         failures = sorted({*existing, *failed})
-        failure_log_path.write_text(
-            "\n".join(failures) + "\n", encoding="utf-8"
-        )
+        failure_log_path.write_text("\n".join(failures) + "\n", encoding="utf-8")
         LOGGER.warning(
             "Dropped %d records after repeated download failures. Logged UUIDs to %s",
             len(failed),
