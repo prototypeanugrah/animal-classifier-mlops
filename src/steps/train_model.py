@@ -108,7 +108,9 @@ def train_model(
         signature=signature,
         registered_model_name=train_config.mlflow_model_name,
     )
-    mlflow_model_uri = mlflow.get_artifact_uri(artifact_path)
+    # Use model registry URI instead of artifact URI for deployment
+    # This ensures we reference the registered model version, not the run artifact
+    mlflow_model_uri = f"models:/{train_config.mlflow_model_name}/latest"
     LOGGER.info("Model logged to MLflow with URI %s", mlflow_model_uri)
 
     LOGGER.info("Model training completed.")

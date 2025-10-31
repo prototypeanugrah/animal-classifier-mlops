@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
+import mlflow
+import mlflow.pytorch
 import numpy as np
 import pandas as pd
 import streamlit as st
+import torch
+import yaml
 from PIL import Image
 from zenml.integrations.mlflow.model_deployers.mlflow_model_deployer import (
     MLFlowModelDeployer,
@@ -82,6 +86,54 @@ def fetch_prediction_service(
     return service
 
 
+@st.cache_resource
+def load_model_directly(
+    model_path: Optional[str] = None,
+    run_id: Optional[str] = None,
+    artifact_path: Optional[str] = None,
+) -> torch.nn.Module:
+    """
+    Load MLflow model directly using run_id or model_path.
+
+    Args:
+        model_path: MLflow model URI (e.g., "models:/animal-classifier-resnet50/latest")
+                    or path to model directory
+        run_id: MLflow run ID (requires artifact_path)
+        artifact_path: Artifact path within the run (e.g., "animal-classifier-resnet50")
+
+    Returns:
+        Loaded PyTorch model
+    """
+    if model_path:
+        model_uri = model_path
+    elif not model_path and not run_id and artifact_path:
+        model_uri = artifact_path
+    elif run_id and artifact_path:
+        model_uri = f"runs:/{run_id}/{artifact_path}"
+    else:
+        raise ValueError(
+            "Either model_path or (run_id + artifact_path) must be provided"
+        )
+
+    model = mlflow.pytorch.load_model(model_uri)
+    model.eval()
+    return model
+
+
+def predict_with_model(
+    model: torch.nn.Module,
+    image_array: np.ndarray,
+    device: str = "cpu",
+) -> np.ndarray:
+    """Run prediction using a directly loaded model."""
+    model.to(device)
+    with torch.no_grad():
+        tensor = torch.from_numpy(image_array).to(device)
+        outputs = model(tensor)
+        predictions = torch.nn.functional.softmax(outputs, dim=1)
+    return predictions.cpu().numpy()
+
+
 def main() -> None:
     st.set_page_config(page_title="Animal Classifier", layout="centered")
     st.title("🐾 Animal Classifier Demo")
@@ -122,28 +174,58 @@ def main() -> None:
         st.error(f"Unable to open the uploaded image: {exc}")
         return
 
+    use_direct_load = st.sidebar.checkbox(
+        "Load model directly (bypass deployment service)"
+    )
+
+    model_uri = "mlruns/models/animal-classifier-resnet50/version-3"
+    with open(model_uri + "/meta.yaml", "r", encoding="utf-8") as f:
+        model_meta = yaml.safe_load(f)
+
+    # run_id = model_meta["run_id"]
+    artifact_path = model_meta[
+        "storage_location"
+    ]  # looks like this: file:///home/public/avaishna2/animal-classifier-mlops/mlruns/484885874116169817/models/m-0a1e1eb16b79427a9aa60dbdff851285/artifacts
+    artifact_path = artifact_path.split("file://")[1]
+    # model_path = artifact_path + "/" + "data/model.pth"
+
     st.image(image, caption="Uploaded Image")
 
-    with st.spinner("Contacting prediction service..."):
+    with st.spinner("Loading model and making prediction..."):
         image_array = prepare_image(image, data_config.image_size)
-        service = fetch_prediction_service(
-            pipeline_name=inference_config.pipeline_name,
-            step_name=inference_config.pipeline_step_name,
-            running=inference_config.running,
-            wait_seconds=inference_config.service_wait_seconds,
-        )
 
-        if service is None:
-            st.error(
-                "No running MLflow prediction service was found. Run the deployment pipeline first."
+        if use_direct_load:
+            # Load model directly
+            try:
+                model = load_model_directly(
+                    # model_path=model_path,
+                    # run_id=run_id,
+                    artifact_path=artifact_path,
+                )
+                predictions = predict_with_model(model, image_array)
+            except Exception as exc:
+                st.error(f"Failed to load model or make prediction: {exc}")
+                return
+        else:
+            # Use existing deployment service approach
+            service = fetch_prediction_service(
+                pipeline_name=inference_config.pipeline_name,
+                step_name=inference_config.pipeline_step_name,
+                running=inference_config.running,
+                wait_seconds=inference_config.service_wait_seconds,
             )
-            return
 
-        try:
-            predictions = np.asarray(service.predict(image_array))
-        except Exception as exc:
-            st.error(f"Prediction request failed: {exc}")
-            return
+            if service is None:
+                st.error(
+                    "No running MLflow prediction service was found. Run the deployment pipeline first."
+                )
+                return
+
+            try:
+                predictions = np.asarray(service.predict(image_array))
+            except Exception as exc:
+                st.error(f"Prediction request failed: {exc}")
+                return
 
     if predictions.ndim != 2 or predictions.shape[1] == 0:
         st.error("Prediction response has unexpected shape.")
