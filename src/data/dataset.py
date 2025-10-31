@@ -110,17 +110,30 @@ class AnimalDataset(Dataset):
                     )
             return self._placeholder_image(cache_path)
 
-    def _download_with_retries(self, url: str, destination: Path, uuid: str) -> bool:
-        for attempt in range(1, self._MAX_DOWNLOAD_RETRIES + 1):
+    @classmethod
+    def _download_with_retries(cls, url: str, destination: Path, uuid: str) -> bool:
+        for attempt in range(1, cls._MAX_DOWNLOAD_RETRIES + 1):
             try:
-                self._download_image(url, destination)
-                return True
+                success = cls._download_image(url, destination)
+                if (
+                    success
+                    and destination.exists()
+                    and destination.stat().st_size > 0
+                ):
+                    return True
+                destination.unlink(missing_ok=True)
+                LOGGER.warning(
+                    "Empty download for UUID %s (attempt %d/%d). Retrying...",
+                    uuid,
+                    attempt,
+                    cls._MAX_DOWNLOAD_RETRIES,
+                )
             except requests.RequestException as exc:
                 LOGGER.warning(
                     "HTTP error downloading image for UUID %s (attempt %d/%d): %s",
                     uuid,
                     attempt,
-                    self._MAX_DOWNLOAD_RETRIES,
+                    cls._MAX_DOWNLOAD_RETRIES,
                     exc,
                 )
                 destination.unlink(missing_ok=True)
@@ -129,24 +142,24 @@ class AnimalDataset(Dataset):
                     "Unexpected error downloading image for UUID %s (attempt %d/%d): %s",
                     uuid,
                     attempt,
-                    self._MAX_DOWNLOAD_RETRIES,
+                    cls._MAX_DOWNLOAD_RETRIES,
                     exc,
                 )
                 destination.unlink(missing_ok=True)
 
-            if attempt < self._MAX_DOWNLOAD_RETRIES:
-                time.sleep(self._RETRY_BACKOFF_SECONDS * attempt)
+            if attempt < cls._MAX_DOWNLOAD_RETRIES:
+                time.sleep(cls._RETRY_BACKOFF_SECONDS * attempt)
 
         LOGGER.error(
             "Giving up on downloading image for UUID %s from %s after %d attempts.",
             uuid,
             url,
-            self._MAX_DOWNLOAD_RETRIES,
+            cls._MAX_DOWNLOAD_RETRIES,
         )
         return False
 
     @staticmethod
-    def _download_image(url: str, destination: Path) -> None:
+    def _download_image(url: str, destination: Path) -> bool:
         ensure_dir(destination.parent)
         try:
             LOGGER.debug("Downloading image from %s", url)
@@ -343,6 +356,52 @@ def create_stratified_splits(
     return train_idx, val_idx, test_idx
 
 
+def filter_records_with_cached_images(
+    records: List[ImageRecord],
+    cache_dir: Path,
+    failure_log_path: Path,
+) -> List[ImageRecord]:
+    """Prefetch images and drop records whose images cannot be cached."""
+    ensure_dir(cache_dir)
+    failed: List[str] = []
+    cached_records: List[ImageRecord] = []
+
+    for record in records:
+        cache_path = cache_dir / f"{record.uuid}.jpg"
+        if cache_path.exists():
+            cached_records.append(record)
+            continue
+
+        if AnimalDataset._download_with_retries(
+            record.image_url, cache_path, record.uuid
+        ) and cache_path.exists():
+            cached_records.append(record)
+        else:
+            failed.append(record.uuid)
+            cache_path.unlink(missing_ok=True)
+
+    if failed:
+        ensure_dir(failure_log_path.parent)
+        existing: List[str] = []
+        if failure_log_path.exists():
+            existing = [
+                line.strip()
+                for line in failure_log_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        failures = sorted({*existing, *failed})
+        failure_log_path.write_text(
+            "\n".join(failures) + "\n", encoding="utf-8"
+        )
+        LOGGER.warning(
+            "Dropped %d records after repeated download failures. Logged UUIDs to %s",
+            len(failed),
+            failure_log_path,
+        )
+
+    return cached_records
+
+
 def prepare_data_for_training(
     config: DataConfig,
 ) -> DatasetBundle:
@@ -360,6 +419,24 @@ def prepare_data_for_training(
     num_classes = len(label_names)
     if num_classes == 0:
         raise ValueError("No classes found in the dataset")
+
+    failure_log_path = config.image_cache_dir / "failed_downloads.txt"
+    original_count = len(records)
+    records = filter_records_with_cached_images(
+        records,
+        config.image_cache_dir,
+        failure_log_path,
+    )
+    if not records:
+        raise ValueError(
+            "No records available after downloading images. "
+            "Check failed_downloads.txt for details."
+        )
+    LOGGER.info(
+        "Retained %d of %d records after verifying image downloads.",
+        len(records),
+        original_count,
+    )
 
     label_array = np.array([record.label_index for record in records])
     train_idx, val_idx, test_idx = create_stratified_splits(
