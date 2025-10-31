@@ -148,13 +148,36 @@ You can manually launch the MLflow experiment tracking through this command (in 
 uv run mlflow ui --backend-store-uri file:./mlruns --port 5000
 ```
 
+## Running the Inference Pipeline
+
+Once the deployment pipeline has produced a running MLflow service, you can execute the inference pipeline to validate predictions against local samples:
+
+```bash
+uv run run_inference.py --config config.yaml
+```
+
+Set `inference.input_image_path` in `config.yaml` to the image you want to score. The pipeline sends the preprocessed image to the deployed MLflow service and logs the raw prediction tensor in the `predictor` step artifacts.
+
+## Streamlit Inference App
+
+For an interactive experience, launch the Streamlit app, upload an image, and view the predicted class:
+
+```bash
+uv run streamlit run streamlit_app.py
+```
+
+The app uses the same preprocessing as the pipeline and contacts the running MLflow service registered by the deployment pipeline.
+
 ## Repository Structure
 
 - `config.yaml` – Configurable data and training parameters.
 - `src/` – Pipeline steps, data handling utilities, models, and custom materializers.
 - `mlruns/` – Local MLflow artifact and experiment logs (created automatically).
 - `models/` – Trained model checkpoints.
-- `run_training.py` – Script entry point to fire the ZenML pipeline.
+- `run_training.py` – Script entry point to fire the ZenML training pipeline.
+- `run_deployment.py` – Runs the deployment pipeline that serves the model via MLflow.
+- `run_inference.py` – Executes the inference pipeline against local sample images.
+- `streamlit_app.py` – Streamlit UI for manual image uploads and predictions.
 
 ## Troubleshooting Tips
 

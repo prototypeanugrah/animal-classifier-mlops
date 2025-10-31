@@ -33,3 +33,10 @@ evaluation:
   min_recall: 0.2
   min_f1: 0.2
   min_accuracy: 0.5
+
+inference:
+  input_image_path: null
+  pipeline_name: "deployment_pipeline"
+  pipeline_step_name: "mlflow_model_deployer_step"
+  running: true
+  service_wait_seconds: 20

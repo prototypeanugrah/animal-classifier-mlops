@@ -10,7 +10,7 @@ inference workflows.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -110,9 +110,36 @@ class EvaluationConfig(BaseModel):
     min_accuracy: float = Field(0.7, ge=0.0, le=1.0)
 
 
+class InferenceConfig(BaseModel):
+    """Minimal configuration for the inference demo."""
+
+    input_image_path: Optional[Path] = Field(
+        None,
+        description="Path to the image used by the inference pipeline demo.",
+    )
+    pipeline_name: str = Field(
+        "deployment_pipeline",
+        description="Name of the pipeline that deployed the MLflow service.",
+    )
+    pipeline_step_name: str = Field(
+        "mlflow_model_deployer_step",
+        description="Name of the step that deployed the MLflow service.",
+    )
+    running: bool = Field(
+        True,
+        description="When true, only return services that are currently running.",
+    )
+    service_wait_seconds: int = Field(
+        20,
+        ge=1,
+        description="Time to wait for the MLflow service to become ready.",
+    )
+
+
 class PipelineConfig(BaseModel):
     """Pipeline configuration."""
 
     data: DataConfig
     train: TrainConfig
     evaluation: EvaluationConfig
+    inference: InferenceConfig
