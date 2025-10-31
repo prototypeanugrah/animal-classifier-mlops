@@ -11,6 +11,7 @@ from src.config import DataConfig, TrainConfig
 from src.data.dataset import DatasetBundle
 from src.evaluators import EvaluateModelOutput, Evaluator
 from src.materializers import EvaluateModelOutputMaterializer
+from src.models import TrainedModelArtifact
 from src.models.resnet18 import AnimalClassifierResNet18
 
 LOGGER = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ LOGGER = logging.getLogger(__name__)
     output_materializers=EvaluateModelOutputMaterializer,
 )
 def evaluate_model(
-    model_path: str,
+    trained_model: TrainedModelArtifact,
     data_bundle: DatasetBundle,
     data_config: DataConfig,
     train_config: TrainConfig,
@@ -39,7 +40,7 @@ def evaluate_model(
     - Logs metrics to MLflow
 
     Args:
-        model_path (str): Path to the saved model checkpoint
+        trained_model (TrainedModelArtifact): References to the trained model
         data_bundle (DatasetBundle): Bundle containing the test dataset (from prepare step)
         data_config (DataConfig): Configuration for data loading
         train_config (TrainConfig): Configuration for model initialization
@@ -56,12 +57,13 @@ def evaluate_model(
         optimizer=train_config.optimizer,
         pretrained=False,  # We're loading trained weights
         lr=train_config.lr,
+        max_lr=train_config.max_lr,
         epochs=train_config.epochs,
         device=train_config.device,
         train_loader=None,  # Not needed for evaluation
         class_weights=None,
     )
-    model.load(Path(model_path))
+    model.load(Path(trained_model.local_path))
 
     test_loader = DataLoader(
         data_bundle.test,

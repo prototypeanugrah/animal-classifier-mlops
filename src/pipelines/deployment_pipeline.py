@@ -2,9 +2,7 @@ from zenml import pipeline
 from zenml.integrations.mlflow.steps import mlflow_model_deployer_step
 
 from src.config import DataConfig, EvaluationConfig, TrainConfig
-from src.steps.create_data import prepare_data_step
-from src.steps.evaluate_model import evaluate_model
-from src.steps.train_model import train_model
+from src.pipelines._shared import run_training_flow
 from src.steps.deploy_model import deployment_trigger
 
 
@@ -29,19 +27,8 @@ def deployment_pipeline(
         evaluation_config (EvaluationConfig): Configuration for evaluation
     """
 
-    # Step 1: Prepare data once (creates train/val/test splits)
-    data_bundle = prepare_data_step(data_config)
-
-    # Step 2: Train model using prepared data
-    model_path = train_model(data_bundle, data_config, train_config)
-
-    # Step 3: Evaluate model using same test data from the bundle
-    metrics = evaluate_model(
-        model_path,
-        data_bundle,
-        data_config,
-        train_config,
-    )
+    # Steps 1-3: Reuse the shared training and evaluation flow
+    trained_model, metrics = run_training_flow(data_config, train_config)
 
     # Step 4: Deploy model if evaluation metrics are good enough
     deployment_decision = deployment_trigger(
@@ -51,8 +38,12 @@ def deployment_pipeline(
 
     model_deployer = mlflow_model_deployer_step.with_options(
         parameters={
-            "model_name": "animal-classifier-resnet18",
+            "model_name": train_config.mlflow_model_name,
             "workers": 2,
         },
     )
-    model_deployer(model=model_path, deploy_decision=deployment_decision)
+
+    model_deployer(
+        model=trained_model,
+        deploy_decision=deployment_decision,
+    )

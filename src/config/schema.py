@@ -79,10 +79,17 @@ class TrainConfig(BaseModel):
 
     seed: int = Field(42, ge=0, description="Random seed for reproducibility.")
     model_name: str = Field("resnet18", description="Name of the model to train.")
+    mlflow_model_name: str = Field(
+        "animal-classifier-resnet18",
+        description="Registered MLflow model name used for deployment updates.",
+    )
     optimizer: str = Field("adamw", description="Optimizer to use.")
     scheduler: str = Field("onecyclelr", description="Scheduler to use.")
     lr: float = Field(
         0.001, ge=0.0, le=1.0, description="Learning rate for the optimizer."
+    )
+    max_lr: float = Field(
+        0.01, ge=0.0, le=1.0, description="Maximum learning rate for the scheduler."
     )
     epochs: int = Field(10, ge=1, description="Number of epochs to train for.")
     device: str = Field("cuda", description="Device to use for training.")

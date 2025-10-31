@@ -23,6 +23,7 @@ class AnimalClassifierResNet18:
         optimizer: str,
         pretrained: bool,
         lr: float,
+        max_lr: float,
         epochs: int,
         device: str,
         train_loader: Optional[DataLoader],
@@ -42,6 +43,7 @@ class AnimalClassifierResNet18:
         """
         self._num_classes = num_classes
         self._lr = lr
+        self._max_lr = max_lr
         self._epochs = epochs
 
         requested_device = device.lower()
@@ -79,7 +81,7 @@ class AnimalClassifierResNet18:
         if train_loader is not None:
             self._scheduler = OneCycleLR(
                 self._optimizer,
-                max_lr=lr,
+                max_lr=max_lr,
                 epochs=epochs,
                 steps_per_epoch=len(train_loader),
             )
@@ -207,6 +209,7 @@ class AnimalClassifierResNet18:
         LOGGER.info("Starting training on %s", self._device)
         LOGGER.info("Number of epochs: %s", self._epochs)
         LOGGER.info("Learning rate: %s", self._lr)
+        LOGGER.info("Maximum learning rate: %s", self._max_lr)
 
         if save_dir is not None:
             save_dir = Path(save_dir)
@@ -218,11 +221,19 @@ class AnimalClassifierResNet18:
 
             # Training phase
             train_loss, train_acc = self.train_epoch(train_loader)
-            LOGGER.info("Training - Loss: %s - Accuracy: %s%%", train_loss, train_acc)
+            LOGGER.info(
+                "Training - Loss: %s - Accuracy: %s%%",
+                train_loss,
+                train_acc,
+            )
 
             # Validation phase
             val_loss, val_acc = self.validate_epoch(val_loader)
-            LOGGER.info("Validation - Loss: %s - Accuracy: %s%%", val_loss, val_acc)
+            LOGGER.info(
+                "Validation - Loss: %s - Accuracy: %s%%",
+                val_loss,
+                val_acc,
+            )
 
             # Update history
             self._training_history["train_loss"].append(train_loss)
@@ -235,6 +246,11 @@ class AnimalClassifierResNet18:
             mlflow.log_metric("train_accuracy", train_acc, step=epoch)
             mlflow.log_metric("val_loss", val_loss, step=epoch)
             mlflow.log_metric("val_accuracy", val_acc, step=epoch)
+            mlflow.log_metric(
+                "learning_rate",
+                self._scheduler.get_last_lr()[0],
+                step=epoch,
+            )
 
             # Save model checkpoint
             if save_dir is not None:
