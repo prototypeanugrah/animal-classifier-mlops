@@ -1,7 +1,10 @@
+"""ResNet50 model for image classification."""
+
 import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+import mlflow
 import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import OneCycleLR
@@ -12,11 +15,12 @@ LOGGER = logging.getLogger(__name__)
 
 
 class AnimalClassifierResNet50:
-    """ResNet18-based animal classifier with training pipeline."""
+    """ResNet50-based animal classifier with training pipeline."""
 
     def __init__(
         self,
         num_classes: int,
+        optimizer: str,
         pretrained: bool,
         lr: float,
         epochs: int,
@@ -32,14 +36,24 @@ class AnimalClassifierResNet50:
             pretrained: Whether to use pretrained ImageNet weights
             lr: Learning rate for optimizer
             epochs: Number of training epochs
-            device: Device to use for training ('cuda' or 'cpu')
+            device: Device to use for training ('cuda', 'mps' or 'cpu')
             train_loader: Training data loader (required for scheduler setup)
             class_weights: Optional class weights for loss function
         """
         self._num_classes = num_classes
         self._lr = lr
         self._epochs = epochs
-        self._device = device
+
+        requested_device = device.lower()
+        if requested_device == "cuda" and not torch.cuda.is_available():
+            LOGGER.warning("CUDA requested but not available!")
+            if torch.backends.mps.is_available():
+                LOGGER.info("MPS is available, using MPS instead of CPU.")
+                requested_device = "mps"
+            else:
+                LOGGER.info("No CUDA or MPS available, using CPU.")
+                requested_device = "cpu"
+        self._device = requested_device
 
         # Initialize model
         self._model = resnet50(
@@ -49,7 +63,12 @@ class AnimalClassifierResNet50:
         self._model = self._model.to(self._device)
 
         # Initialize optimizer and loss
-        self._optimizer = torch.optim.Adam(self._model.parameters(), lr=lr)
+        _OPTIMIZERS = {
+            "adamw": torch.optim.AdamW,
+            "adam": torch.optim.Adam,
+            "sgd": torch.optim.SGD,
+        }
+        self._optimizer = _OPTIMIZERS[optimizer](self._model.parameters(), lr=lr)
 
         if class_weights is not None:
             class_weights = class_weights.to(self._device)
@@ -120,9 +139,11 @@ class AnimalClassifierResNet50:
 
             if batch_idx % 10 == 0:
                 LOGGER.info(
-                    f"Batch [{batch_idx}/{len(train_loader)}] - "
-                    f"Loss: {loss.item():.4f} - "
-                    f"Acc: {100.0 * correct / total:.2f}%"
+                    "Batch [%s/%s] - Loss: %s - Acc: %s%%",
+                    batch_idx,
+                    len(train_loader),
+                    loss.item(),
+                    100.0 * correct / total,
                 )
 
         avg_loss = total_loss / len(train_loader)
@@ -183,33 +204,37 @@ class AnimalClassifierResNet50:
         Returns:
             Dictionary containing training history
         """
-        LOGGER.info(f"Starting training on {self._device}")
-        LOGGER.info(f"Number of epochs: {self._epochs}")
-        LOGGER.info(f"Learning rate: {self._lr}")
+        LOGGER.info("Starting training on %s", self._device)
+        LOGGER.info("Number of epochs: %s", self._epochs)
+        LOGGER.info("Learning rate: %s", self._lr)
 
         if save_dir is not None:
             save_dir = Path(save_dir)
             save_dir.mkdir(parents=True, exist_ok=True)
 
         for epoch in range(self._epochs):
-            LOGGER.info(f"\nEpoch {epoch + 1}/{self._epochs}")
+            LOGGER.info("\nEpoch %s/%s", epoch + 1, self._epochs)
             LOGGER.info("-" * 50)
 
             # Training phase
             train_loss, train_acc = self.train_epoch(train_loader)
-            LOGGER.info(
-                f"Training - Loss: {train_loss:.4f} - Accuracy: {train_acc:.2f}%"
-            )
+            LOGGER.info("Training - Loss: %s - Accuracy: %s%%", train_loss, train_acc)
 
             # Validation phase
             val_loss, val_acc = self.validate_epoch(val_loader)
-            LOGGER.info(f"Validation - Loss: {val_loss:.4f} - Accuracy: {val_acc:.2f}%")
+            LOGGER.info("Validation - Loss: %s - Accuracy: %s%%", val_loss, val_acc)
 
             # Update history
             self._training_history["train_loss"].append(train_loss)
             self._training_history["train_acc"].append(train_acc)
             self._training_history["val_loss"].append(val_loss)
             self._training_history["val_acc"].append(val_acc)
+
+            # Log metrics to MLflow for real-time monitoring
+            mlflow.log_metric("train_loss", train_loss, step=epoch)
+            mlflow.log_metric("train_accuracy", train_acc, step=epoch)
+            mlflow.log_metric("val_loss", val_loss, step=epoch)
+            mlflow.log_metric("val_accuracy", val_acc, step=epoch)
 
             # Save model checkpoint
             if save_dir is not None:
@@ -220,16 +245,17 @@ class AnimalClassifierResNet50:
                         best_model_path = save_dir / "best_model.pth"
                         self.save(best_model_path)
                         LOGGER.info(
-                            f"Saved best model with validation accuracy: {val_acc:.2f}%"
+                            "Saved best model with validation accuracy: %s%%",
+                            val_acc,
                         )
                 else:
                     checkpoint_path = save_dir / f"model_epoch_{epoch + 1}.pth"
                     self.save(checkpoint_path)
-                    LOGGER.info(f"Saved checkpoint: {checkpoint_path}")
+                    LOGGER.info("Saved checkpoint: %s", checkpoint_path)
 
         LOGGER.info("\nTraining completed!")
-        LOGGER.info(f"Best validation accuracy: {self._best_val_acc:.2f}%")
-        LOGGER.info(f"Best validation loss: {self._best_val_loss:.4f}")
+        LOGGER.info("Best validation accuracy: %s%%", self._best_val_acc)
+        LOGGER.info("Best validation loss: %s", self._best_val_loss)
 
         return self._training_history
 
@@ -241,7 +267,7 @@ class AnimalClassifierResNet50:
             path: Path to save the model
         """
         torch.save(self._model.state_dict(), path)
-        LOGGER.info(f"Model saved to {path}")
+        LOGGER.info("Model saved to %s", path)
 
     def load(self, path: Path) -> None:
         """
@@ -252,7 +278,7 @@ class AnimalClassifierResNet50:
         """
         self._model.load_state_dict(torch.load(path, map_location=self._device))
         self._model = self._model.to(self._device)
-        LOGGER.info(f"Model loaded from {path}")
+        LOGGER.info("Model loaded from %s", path)
 
     def get_model(self) -> nn.Module:
         """Get the underlying PyTorch model."""
@@ -261,3 +287,35 @@ class AnimalClassifierResNet50:
     def get_training_history(self) -> Dict[str, list]:
         """Get the training history."""
         return self._training_history
+
+    def predict(self, data_loader: DataLoader) -> torch.Tensor:
+        """
+        Generate predictions for a data loader.
+
+        Args:
+            data_loader: DataLoader to generate predictions for
+
+        Returns:
+            torch.Tensor: Predicted class indices
+        """
+        self._model.eval()
+        predictions = []
+
+        with torch.no_grad():
+            for inputs, _ in data_loader:
+                inputs = inputs.to(self._device)
+                outputs = self._model(inputs)
+                _, preds = torch.max(outputs, 1)
+                predictions.append(preds.cpu())
+
+        return torch.cat(predictions)
+
+    @property
+    def model(self) -> nn.Module:
+        """Expose the underlying model (for compatibility)."""
+        return self._model
+
+    @property
+    def device(self) -> str:
+        """Expose the configured device."""
+        return self._device

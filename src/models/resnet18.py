@@ -1,3 +1,5 @@
+"""ResNet18 model for image classification."""
+
 import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -137,9 +139,11 @@ class AnimalClassifierResNet18:
 
             if batch_idx % 10 == 0:
                 LOGGER.info(
-                    f"Batch [{batch_idx}/{len(train_loader)}] - "
-                    f"Loss: {loss.item():.4f} - "
-                    f"Acc: {100.0 * correct / total:.2f}%"
+                    "Batch [%s/%s] - Loss: %s - Acc: %s%%",
+                    batch_idx,
+                    len(train_loader),
+                    loss.item(),
+                    100.0 * correct / total,
                 )
 
         avg_loss = total_loss / len(train_loader)
@@ -200,27 +204,25 @@ class AnimalClassifierResNet18:
         Returns:
             Dictionary containing training history
         """
-        LOGGER.info(f"Starting training on {self._device}")
-        LOGGER.info(f"Number of epochs: {self._epochs}")
-        LOGGER.info(f"Learning rate: {self._lr}")
+        LOGGER.info("Starting training on %s", self._device)
+        LOGGER.info("Number of epochs: %s", self._epochs)
+        LOGGER.info("Learning rate: %s", self._lr)
 
         if save_dir is not None:
             save_dir = Path(save_dir)
             save_dir.mkdir(parents=True, exist_ok=True)
 
         for epoch in range(self._epochs):
-            LOGGER.info(f"\nEpoch {epoch + 1}/{self._epochs}")
+            LOGGER.info("\nEpoch %s/%s", epoch + 1, self._epochs)
             LOGGER.info("-" * 50)
 
             # Training phase
             train_loss, train_acc = self.train_epoch(train_loader)
-            LOGGER.info(
-                f"Training - Loss: {train_loss:.4f} - Accuracy: {train_acc:.2f}%"
-            )
+            LOGGER.info("Training - Loss: %s - Accuracy: %s%%", train_loss, train_acc)
 
             # Validation phase
             val_loss, val_acc = self.validate_epoch(val_loader)
-            LOGGER.info(f"Validation - Loss: {val_loss:.4f} - Accuracy: {val_acc:.2f}%")
+            LOGGER.info("Validation - Loss: %s - Accuracy: %s%%", val_loss, val_acc)
 
             # Update history
             self._training_history["train_loss"].append(train_loss)
@@ -243,16 +245,17 @@ class AnimalClassifierResNet18:
                         best_model_path = save_dir / "best_model.pth"
                         self.save(best_model_path)
                         LOGGER.info(
-                            f"Saved best model with validation accuracy: {val_acc:.2f}%"
+                            "Saved best model with validation accuracy: %s%%",
+                            val_acc,
                         )
                 else:
                     checkpoint_path = save_dir / f"model_epoch_{epoch + 1}.pth"
                     self.save(checkpoint_path)
-                    LOGGER.info(f"Saved checkpoint: {checkpoint_path}")
+                    LOGGER.info("Saved checkpoint: %s", checkpoint_path)
 
         LOGGER.info("\nTraining completed!")
-        LOGGER.info(f"Best validation accuracy: {self._best_val_acc:.2f}%")
-        LOGGER.info(f"Best validation loss: {self._best_val_loss:.4f}")
+        LOGGER.info("Best validation accuracy: %s%%", self._best_val_acc)
+        LOGGER.info("Best validation loss: %s", self._best_val_loss)
 
         return self._training_history
 
@@ -264,7 +267,7 @@ class AnimalClassifierResNet18:
             path: Path to save the model
         """
         torch.save(self._model.state_dict(), path)
-        LOGGER.info(f"Model saved to {path}")
+        LOGGER.info("Model saved to %s", path)
 
     def load(self, path: Path) -> None:
         """
