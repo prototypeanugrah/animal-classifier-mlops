@@ -340,13 +340,6 @@ def create_stratified_splits(
         stratify=stratify_holdout,
     )
 
-    LOGGER.info(
-        "Created stratified splits: train=%d, val=%d, test=%d",
-        len(train_idx),
-        len(val_idx),
-        len(test_idx),
-    )
-
     return train_idx, val_idx, test_idx
 
 
