@@ -77,7 +77,6 @@ class DataConfig(BaseModel):
 class TrainConfig(BaseModel):
     """Training configuration."""
 
-    seed: int = Field(42, ge=0, description="Random seed for reproducibility.")
     model_name: str = Field("resnet18", description="Name of the model to train.")
     mlflow_model_name: str = Field(
         "animal-classifier-resnet18",
@@ -93,7 +92,6 @@ class TrainConfig(BaseModel):
     )
     epochs: int = Field(10, ge=1, description="Number of epochs to train for.")
     device: str = Field("cuda", description="Device to use for training.")
-    batch_size: int = Field(32, ge=1, description="Batch size for training.")
     pretrained: bool = Field(True, description="Whether to use pretrained weights.")
     save_dir: Path = Field(Path("models"), description="Directory to save the model.")
     save_best_only: bool = Field(

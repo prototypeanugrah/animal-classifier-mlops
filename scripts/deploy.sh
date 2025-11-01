@@ -2,6 +2,10 @@
 set -euo pipefail
 
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+export ZENML_AUTO_OPEN_DASHBOARD=false
+
+echo "[deploy] Initializing ZenML..."
+uv run zenml init
 
 echo "[deploy] Authenticating with local ZenML server..."
 if ! uv run zenml logout --local >/dev/null 2>&1; then
@@ -38,32 +42,40 @@ fi
 
 uv run zenml stack describe
 
-# TEST_CONFIG_FILE="$(mktemp "${TMPDIR:-/tmp}/deployment-config.XXXXXX")"
-# trap 'rm -f "${TEST_CONFIG_FILE}"' EXIT
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIG_FILE="${PROJECT_ROOT}/src/steps/config.yaml"
 
-# echo "[deploy] Creating test configuration at ${TEST_CONFIG_FILE}..."
-# TEST_CONFIG_FILE="${TEST_CONFIG_FILE}" uv run python - <<'PY'
-# import os
-# from pathlib import Path
+if [ ! -f "${CONFIG_FILE}" ]; then
+  echo "[deploy] Error: Config file not found at ${CONFIG_FILE}"
+  exit 1
+fi
 
-# import yaml
+TEST_CONFIG_FILE="$(mktemp "${TMPDIR:-/tmp}/deployment-config.XXXXXX")"
+trap 'rm -f "${TEST_CONFIG_FILE}"' EXIT
 
-# base = Path("config.yaml")
-# config = yaml.safe_load(base.read_text())
+echo "[deploy] Creating test configuration at ${TEST_CONFIG_FILE}..."
+TEST_CONFIG_FILE="${TEST_CONFIG_FILE}" uv run python - <<'PY'
+import os
+from pathlib import Path
 
-# config["train"]["epochs"] = 5
-# config['train']['model_name'] = 'resnet18'
-# config["evaluation"]["min_precision"] = 0.05
-# config["evaluation"]["min_recall"] = 0.05
-# config["evaluation"]["min_f1"] = 0.05
-# config["evaluation"]["min_accuracy"] = 0.05
+import yaml
 
-# Path(os.environ["TEST_CONFIG_FILE"]).write_text(
-#     yaml.safe_dump(config, sort_keys=False)
-# )
-# PY
+base = Path("src/steps/config.yaml")
+config = yaml.safe_load(base.read_text())
 
-TEST_CONFIG_FILE="config.yaml"
+config["train"]["epochs"] = 5
+config['train']['model_name'] = 'resnet18'
+config['train']['mlflow_model_name'] = 'animal-classifier-resnet18'
+config["evaluation"]["min_precision"] = 0.05
+config["evaluation"]["min_recall"] = 0.05
+config["evaluation"]["min_f1"] = 0.05
+config["evaluation"]["min_accuracy"] = 0.05
+
+Path(os.environ["TEST_CONFIG_FILE"]).write_text(
+    yaml.safe_dump(config, sort_keys=False)
+)
+PY
+
 
 echo "[deploy] Running deployment pipeline with test configuration..."
-uv run run_deployment.py --config ${TEST_CONFIG_FILE}
+uv run run_deployment.py

@@ -9,15 +9,13 @@ data:
   test_size: 0.15
   num_workers: 4
   image_size: 224
-  batch_size: 128
+  batch_size: 256
   image_cache_dir: "data/raw/images"
   seed: 42
 
 train:
-  seed: 42
   model_name: "resnet50"
   mlflow_model_name: "animal-classifier-resnet50"
-  batch_size: 256
   optimizer: "adamw"
   scheduler: "onecyclelr"
   lr: 0.0001

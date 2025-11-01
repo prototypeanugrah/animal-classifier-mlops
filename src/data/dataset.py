@@ -517,30 +517,6 @@ def build_data_loaders(
     }
 
 
-def dataset_to_arrays(dataset: AnimalDataset) -> Tuple[DataLoader, np.ndarray]:
-    """Convert a dataset to a DataLoader and label array for evaluation.
-
-    Args:
-        dataset: The dataset to convert.
-
-    Returns:
-        Tuple containing:
-            - DataLoader: A DataLoader for the dataset (for getting predictions)
-            - np.ndarray: Array of labels (for evaluation)
-    """
-    loader = DataLoader(
-        dataset,
-        batch_size=32,
-        shuffle=False,
-        num_workers=0,
-    )
-
-    # Extract all labels
-    labels = np.array([record.label_index for record in dataset._records])
-
-    return loader, labels
-
-
 __all__ = [
     "ImageRecord",
     "AnimalDataset",
@@ -548,5 +524,4 @@ __all__ = [
     "clean_and_prepare_data",
     "prepare_data_for_training",
     "build_data_loaders",
-    "dataset_to_arrays",
 ]

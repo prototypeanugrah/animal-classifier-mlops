@@ -4,29 +4,45 @@ from pathlib import Path
 import mlflow
 import numpy as np
 import torch
+import yaml
 from torch.utils.data import DataLoader
 from zenml import step
 
-from src.config import DataConfig, TrainConfig
+from src.config import DataConfig
 from src.data.dataset import DatasetBundle
 from src.evaluators import EvaluateModelOutput, Evaluator
-from src.materializers import EvaluateModelOutputMaterializer
-from src.models import TrainedModelArtifact
 from src.models.resnet18 import AnimalClassifierResNet18
 
 LOGGER = logging.getLogger(__name__)
 
 
+def _find_config_file(filename: str) -> Path:
+    """Find the config.yaml file in common locations."""
+    # Try current directory first (for temp files from deploy script)
+    if Path(filename).exists():
+        return Path(filename)
+
+    # Try project root
+    project_root = Path(__file__).parent.parent.parent
+    if (project_root / filename).exists():
+        return project_root / filename
+
+    # Try src/steps/config.yaml
+    if (project_root / "src" / "steps" / filename).exists():
+        return project_root / "src" / "steps" / filename
+
+    # Default fallback
+    return Path(filename)
+
+
 @step(
     enable_cache=False,
     experiment_tracker="mlflow_tracker",
-    output_materializers=EvaluateModelOutputMaterializer,
+    # output_materializers=EvaluateModelOutputMaterializer,
 )
 def evaluate_model(
-    trained_model: TrainedModelArtifact,
+    model: AnimalClassifierResNet18,
     data_bundle: DatasetBundle,
-    data_config: DataConfig,
-    train_config: TrainConfig,
 ) -> EvaluateModelOutput:
     """
     Evaluate the model on the test data.
@@ -40,7 +56,7 @@ def evaluate_model(
     - Logs metrics to MLflow
 
     Args:
-        trained_model (TrainedModelArtifact): References to the trained model
+        model (torch.nn.Module): The trained model
         data_bundle (DatasetBundle): Bundle containing the test dataset (from prepare step)
         data_config (DataConfig): Configuration for data loading
         train_config (TrainConfig): Configuration for model initialization
@@ -48,22 +64,28 @@ def evaluate_model(
     Returns:
         EvaluateModelOutput: Evaluation metrics containing accuracy, precision, recall, and f1 score
     """
+
+    config_path = _find_config_file("test_config.yaml")
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        data_config = DataConfig(**config["data"])
+
     evaluator = Evaluator()
 
-    num_classes = len(data_bundle.label_names)
+    # num_classes = len(data_bundle.label_names)
 
-    model = AnimalClassifierResNet18(
-        num_classes=num_classes,
-        optimizer=train_config.optimizer,
-        pretrained=False,  # We're loading trained weights
-        lr=train_config.lr,
-        max_lr=train_config.max_lr,
-        epochs=train_config.epochs,
-        device=train_config.device,
-        train_loader=None,  # Not needed for evaluation
-        class_weights=None,
-    )
-    model.load(Path(trained_model.local_path))
+    # model = AnimalClassifierResNet18(
+    #     num_classes=num_classes,
+    #     optimizer=train_config.optimizer,
+    #     pretrained=False,  # We're loading trained weights
+    #     lr=train_config.lr,
+    #     max_lr=train_config.max_lr,
+    #     epochs=train_config.epochs,
+    #     device=train_config.device,
+    #     train_loader=None,  # Not needed for evaluation
+    #     class_weights=None,
+    # )
+    # model.load(Path(trained_model.local_path))
 
     test_loader = DataLoader(
         data_bundle.test,
@@ -79,11 +101,11 @@ def evaluate_model(
         all_predictions = []
         all_labels = []
 
-        model.model.eval()
+        model.eval()
         with torch.no_grad():
             for images, labels in test_loader:
                 images = images.to(model.device)
-                outputs = model.model(images)
+                outputs = model(images)
                 _, predicted = torch.max(outputs, 1)
 
                 all_predictions.extend(predicted.cpu().numpy())

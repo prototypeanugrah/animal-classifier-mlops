@@ -3,28 +3,44 @@ from pathlib import Path
 
 import mlflow
 import torch
+import yaml
 from mlflow.models import infer_signature
 from zenml import step
 
 from src.config import DataConfig, TrainConfig
 from src.data.dataset import DatasetBundle, build_data_loaders
-from src.materializers import TrainedModelArtifactMaterializer
-from src.models import TrainedModelArtifact
 from src.models.resnet18 import AnimalClassifierResNet18
 
 LOGGER = logging.getLogger(__name__)
 
 
+def _find_config_file(filename: str) -> Path:
+    """Find the config.yaml file in common locations."""
+    # Try current directory first (for temp files from deploy script)
+    if Path(filename).exists():
+        return Path(filename)
+
+    # Try project root
+    project_root = Path(__file__).parent.parent.parent
+    if (project_root / filename).exists():
+        return project_root / filename
+
+    # Try src/steps/config.yaml
+    if (project_root / "src" / "steps" / filename).exists():
+        return project_root / "src" / "steps" / filename
+
+    # Default fallback
+    return Path(filename)
+
+
 @step(
-    enable_cache=False,
+    # enable_cache=False,
     experiment_tracker="mlflow_tracker",
-    output_materializers=TrainedModelArtifactMaterializer,
+    # output_materializers=TrainedModelArtifactMaterializer,
 )
 def train_model(
     data_bundle: DatasetBundle,
-    data_config: DataConfig,
-    train_config: TrainConfig,
-) -> TrainedModelArtifact:
+) -> torch.nn.Module:
     """
     Train the model on the prepared data.
 
@@ -45,13 +61,26 @@ def train_model(
         TrainedModelArtifact: References to the trained model artifact
     """
     LOGGER.info("Building data loaders...")
+
+    LOGGER.info("Preparing data for training...")
+    config_path = _find_config_file("test_config.yaml")
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        data_config = DataConfig(**config["data"])
+        train_config = TrainConfig(**config["train"])
+
+    mlflow.log_params(train_config.model_dump(mode="json"))
+
     loaders = build_data_loaders(
         data_bundle,
         batch_size=data_config.batch_size,
         num_workers=data_config.num_workers,
     )
 
-    LOGGER.info("Initializing model with %d classes...", len(data_bundle.label_names))
+    LOGGER.info(
+        "Initializing model with %d classes...",
+        len(data_bundle.label_names),
+    )
     model = AnimalClassifierResNet18(
         num_classes=len(data_bundle.label_names),
         optimizer=train_config.optimizer,
@@ -86,9 +115,9 @@ def train_model(
         data_config.image_size,
         device="cpu",
     )
-    model.model.eval()
+    model.eval()
     with torch.no_grad():
-        example_output = model.model(example_input.to(model.device)).cpu().numpy()
+        example_output = model(example_input.to(model.device)).cpu().numpy()
 
     example_input_numpy = example_input.cpu().numpy()
     signature = infer_signature(
@@ -102,19 +131,22 @@ def train_model(
         artifact_path,
     )
     mlflow.pytorch.log_model(
-        pytorch_model=model.model,
+        pytorch_model=model,
         artifact_path=artifact_path,
         input_example=example_input_numpy,
         signature=signature,
         registered_model_name=train_config.mlflow_model_name,
     )
-    # Use model registry URI instead of artifact URI for deployment
-    # This ensures we reference the registered model version, not the run artifact
-    mlflow_model_uri = f"models:/{train_config.mlflow_model_name}/latest"
-    LOGGER.info("Model logged to MLflow with URI %s", mlflow_model_uri)
+    # # Use model registry URI instead of artifact URI for deployment
+    # # This ensures we reference the registered model version, not the run artifact
+    # mlflow_model_uri = f"models:/{train_config.mlflow_model_name}/latest"
+    # LOGGER.info("Model logged to MLflow with URI %s", mlflow_model_uri)
 
-    LOGGER.info("Model training completed.")
-    return TrainedModelArtifact(
-        local_path=model_path,
-        mlflow_model_uri=mlflow_model_uri,
-    )
+    # LOGGER.info("Model training completed.")
+    # return TrainedModelArtifact(
+    #     model=model.model,
+    #     local_path=model_path,
+    #     mlflow_model_uri=mlflow_model_uri,
+    # )
+
+    return model
