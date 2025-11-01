@@ -11,6 +11,7 @@ from zenml import step
 from src.config import DataConfig
 from src.data.dataset import DatasetBundle
 from src.evaluators import EvaluateModelOutput, Evaluator
+from src.materializers import EvaluateModelOutputMaterializer
 from src.models.resnet18 import AnimalClassifierResNet18
 
 LOGGER = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ def _find_config_file(filename: str) -> Path:
 @step(
     enable_cache=False,
     experiment_tracker="mlflow_tracker",
-    # output_materializers=EvaluateModelOutputMaterializer,
+    output_materializers=EvaluateModelOutputMaterializer,
 )
 def evaluate_model(
     model: AnimalClassifierResNet18,
